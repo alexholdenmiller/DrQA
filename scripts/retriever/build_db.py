@@ -79,7 +79,9 @@ def get_contents(filename):
             if not doc:
                 continue
             # Add the document
-            documents.append((utils.normalize(doc['id']), doc['text']))
+            documents.append((utils.normalize(doc['id']),
+                              doc['text'],
+                              doc.get('value')))
     return documents
 
 
@@ -100,15 +102,15 @@ def store_contents(data_path, save_path, preprocess, num_workers=None):
     logger.info('Reading into database...')
     conn = sqlite3.connect(save_path)
     c = conn.cursor()
-    c.execute("CREATE TABLE documents (id PRIMARY KEY, text);")
+    c.execute("CREATE TABLE documents (id PRIMARY KEY, text, value);")
 
     workers = ProcessPool(num_workers, initializer=init, initargs=(preprocess,))
     files = [f for f in iter_files(data_path)]
     count = 0
     with tqdm(total=len(files)) as pbar:
-        for pairs in tqdm(workers.imap_unordered(get_contents, files)):
-            count += len(pairs)
-            c.executemany("INSERT INTO documents VALUES (?,?)", pairs)
+        for triple in tqdm(workers.imap_unordered(get_contents, files)):
+            count += len(triple)
+            c.executemany("INSERT INTO documents VALUES (?,?,?)", triple)
             pbar.update()
     logger.info('Read %d docs.' % count)
     logger.info('Committing...')
