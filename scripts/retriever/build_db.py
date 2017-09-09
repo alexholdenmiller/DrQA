@@ -59,7 +59,13 @@ def iter_files(path):
     elif os.path.isdir(path):
         for dirpath, _, filenames in os.walk(path):
             for f in filenames:
-                yield os.path.join(dirpath, f)
+                join = os.path.join(dirpath, f)
+                if os.path.isfile(join):
+                    if f.endswith('.json'):
+                        yield join
+                else:
+                    for pth in iter_files(join):
+                        yield pth
     else:
         raise RuntimeError('Path %s is invalid' % path)
 
@@ -67,11 +73,15 @@ def iter_files(path):
 def get_contents(filename):
     """Parse the contents of a file. Each line is a JSON encoded document."""
     global PREPROCESS_FN
-    documents = []
+    documents = {}
     with open(filename) as f:
         for line in f:
             # Parse document
-            doc = json.loads(line)
+            try:
+                doc = json.loads(line)
+            except json.decoder.JSONDecodeError:
+                # print('Error processing line, skipping it: ', line[:30], '...')
+                continue
             # Maybe preprocess the document with custom function
             if PREPROCESS_FN:
                 doc = PREPROCESS_FN(doc)
@@ -79,9 +89,7 @@ def get_contents(filename):
             if not doc:
                 continue
             # Add the document
-            documents.append((utils.normalize(doc['id']),
-                              doc['text'],
-                              doc.get('value')))
+            documents[doc['id']] = (doc['text'], doc.get('value'))
     return documents
 
 
@@ -108,9 +116,9 @@ def store_contents(data_path, save_path, preprocess, num_workers=None):
     files = [f for f in iter_files(data_path)]
     count = 0
     with tqdm(total=len(files)) as pbar:
-        for triple in tqdm(workers.imap_unordered(get_contents, files)):
-            count += len(triple)
-            c.executemany("INSERT INTO documents VALUES (?,?,?)", triple)
+        for triples in tqdm(workers.imap_unordered(get_contents, files)):
+            triple_list = [(k,v[0],v[1]) for k, v in triples.items()]
+            c.executemany("INSERT OR IGNORE INTO documents VALUES (?,?,?)", triple_list)
             pbar.update()
     logger.info('Read %d docs.' % count)
     logger.info('Committing...')
