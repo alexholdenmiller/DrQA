@@ -59,13 +59,7 @@ def iter_files(path):
     elif os.path.isdir(path):
         for dirpath, _, filenames in os.walk(path):
             for f in filenames:
-                join = os.path.join(dirpath, f)
-                if os.path.isfile(join):
-                    if f.endswith('.json'):
-                        yield join
-                else:
-                    for pth in iter_files(join):
-                        yield pth
+                yield os.path.join(dirpath, f)
     else:
         raise RuntimeError('Path %s is invalid' % path)
 
@@ -80,7 +74,7 @@ def get_contents(filename):
             try:
                 doc = json.loads(line)
             except json.decoder.JSONDecodeError:
-                # print('Error processing line, skipping it: ', line[:30], '...')
+                print('Error processing line, skipping it: ', line[:30], '...')
                 continue
             # Maybe preprocess the document with custom function
             if PREPROCESS_FN:
