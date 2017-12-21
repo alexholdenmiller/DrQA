@@ -74,7 +74,7 @@ def get_contents(filename):
             try:
                 doc = json.loads(line)
             except json.decoder.JSONDecodeError:
-                print('Error processing line, skipping it: ', line[:30], '...')
+                print('JSON error processing line, skipping it: ', line[:30], '...')
                 continue
             # Maybe preprocess the document with custom function
             if PREPROCESS_FN:
@@ -111,10 +111,11 @@ def store_contents(data_path, save_path, preprocess, num_workers=None):
     count = 0
     with tqdm(total=len(files)) as pbar:
         for triples in tqdm(workers.imap_unordered(get_contents, files)):
+            count += len(triples)
             triple_list = [(k,v[0],v[1]) for k, v in triples.items()]
             c.executemany("INSERT OR IGNORE INTO documents VALUES (?,?,?)", triple_list)
             pbar.update()
-    logger.info('Read %d docs.' % count)
+    logger.info('Read %d docs from %d files.' % (count, len(files)))
     logger.info('Committing...')
     conn.commit()
     conn.close()
